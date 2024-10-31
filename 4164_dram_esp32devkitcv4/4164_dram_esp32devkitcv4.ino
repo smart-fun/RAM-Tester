@@ -46,32 +46,112 @@ void loop() {
   digitalWrite(GREEN_LED, HIGH);
   digitalWrite(RED_LED, LOW);
   delay(500);
-  
-  for(int row=0; row<=255; row++) {
-    Serial.println("Testing row: " + String(row));
+
+/*
+  writeByte(8, 0xD2);
+  int value = readByte(8);
+  Serial.println("value expected 210: " + String(value));
+  writeByte(10, 0x2D);
+  value = readByte(10);
+  Serial.println("value expected 45: " + String(value));
+*/
+
+  int nbErrors = 0;
+  boolean hasError = false;
+
+  for(int row=0; row<256; row++) {
     blink = 1 - blink;
-    digitalWrite(GREEN_LED, blink);
+
+    if (blink) {
+      digitalWrite(hasError ? RED_LED : GREEN_LED, blink);
+    } else {
+      digitalWrite(GREEN_LED, false);
+      digitalWrite(RED_LED, false);
+    }
 
     writeBits(row);
     int numberOfBits = readBits(row);
   
-    if (numberOfBits != 256) {
-      digitalWrite(GREEN_LED, LOW);
-      digitalWrite(RED_LED, HIGH);
-      Serial.println("ERROR: row " + String(row) + " number of bits was: " + String(numberOfBits)) + ", but should be 255.";
-      while(1);
+    hasError = (numberOfBits != 256);
+    if (hasError) {
+      ++nbErrors;
+      Serial.println("");
+      Serial.println("Error row: " + String(row));
+    } else {
+      Serial.print(String(row) + ", ");
     }
+
   }
 
-  Serial.println("Test DONE. All OK!");
+  Serial.println("Test DONE, Errors : " + String(nbErrors));
+
+  if (nbErrors > 0) {
+      digitalWrite(GREEN_LED, false);
+      digitalWrite(RED_LED, true);
+  } else {
+      digitalWrite(GREEN_LED, true);
+      digitalWrite(RED_LED, false);
+  }
 
   while(1) {
-    digitalWrite(GREEN_LED, HIGH);
     delay(500);
   }
   
 }
 
+// write Byte : NOT really possible as the speed is not accurate
+/*
+void writeByte(int address, int value) {
+
+  address = address & 0x1FFF;   // only 8 kbytes
+  int bit = address * 8;
+  int row = bit >> 8;
+  int column = bit & 0xFF;
+
+  // Pull RAS and CAS HIGH
+  digitalWrite(RAS, HIGH);
+  digitalWrite(CAS, HIGH);
+  digitalWrite(NOT_WRITE, HIGH);
+
+  unsigned long startTime = 0;
+  unsigned long stopTime = 0;
+
+  // Loop though all the columns
+  for (int i=0; i<8; i++) {
+
+    // Set row address
+    for(int pin=0; pin<8; ++pin) {
+      digitalWrite(ADDR_PINS[pin], bitRead(row, pin));
+    }
+
+    startTime = micros();
+    // Pull RAS LOW
+    digitalWrite(RAS, LOW);
+
+    // Pull Write LOW (Enables write)
+    digitalWrite(NOT_WRITE, LOW);   
+
+    // Set Data (little endian)
+    int data = bitRead(value, i);
+    digitalWrite(DATA_IN, data);
+
+    // Set column address
+    for(int pin=0; pin<8; ++pin) {
+      digitalWrite(ADDR_PINS[pin], bitRead(column+i, pin));
+    }
+    stopTime = micros();
+    // Pull CAS LOW
+    digitalWrite(CAS, LOW);
+
+    digitalWrite(NOT_WRITE, HIGH);
+    digitalWrite(CAS, HIGH);
+    digitalWrite(RAS, HIGH);
+  }
+
+  unsigned long diff = stopTime - startTime;
+  Serial.println("duration : " + String(diff) + " micros");
+}
+*/
 void writeBits(int row) {
 
   // Pull RAS and CAS HIGH
@@ -107,6 +187,55 @@ void writeBits(int row) {
     digitalWrite(CAS, HIGH);
   }
 }
+
+// readByte: NOT really possible as the speed is not accurate
+/*
+int readByte(int address) {
+
+  address = address & 0x1FFF;   // only 8 kbytes
+  int bit = address * 8;
+  int row = bit >> 8;
+  int column = bit & 0xFF;
+  int value = 0;
+
+    // Pull RAS, CAS and Write HIGH
+  digitalWrite(RAS, HIGH);
+  digitalWrite(CAS, HIGH);
+  digitalWrite(NOT_WRITE, LOW);
+
+  // Loop though all the columns
+  for (int i=0; i<8; i++) {
+
+    // Set row address
+    for(int pin=0; pin<8; ++pin) {
+      digitalWrite(ADDR_PINS[pin], bitRead(row, pin));
+    }
+
+    // Pull RAS LOW
+    digitalWrite(RAS, LOW);
+
+    digitalWrite(NOT_WRITE, HIGH);
+
+    // Set column address
+    for(int pin=0; pin<8; ++pin) {
+      digitalWrite(ADDR_PINS[pin], bitRead(column+i, pin));
+    }
+    // Pull CAS LOW
+    digitalWrite(CAS, LOW);
+
+    // Read the stored bit
+    int data = digitalRead(DATA_OUT);
+    value += (data << i);
+
+    // Pull RAS and CAS HIGH
+    digitalWrite(CAS, HIGH);
+    digitalWrite(RAS, HIGH);
+    digitalWrite(NOT_WRITE, LOW);
+  }
+
+  return value;
+}
+*/
 
 int readBits(int row) {
 
